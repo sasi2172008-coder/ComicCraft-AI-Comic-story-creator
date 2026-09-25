@@ -7,7 +7,11 @@ from ai_services import (
     generate_illustration
 )
 
+from routes import router
+
 app = FastAPI()
+
+app.include_router(router)
 
 templates = Jinja2Templates(directory="templates")
 
