@@ -1,6 +1,12 @@
 from fastapi import FastAPI, Request, Form
 from fastapi.templating import Jinja2Templates
 
+from ai_services import (
+    generate_outline,
+    generate_story,
+    generate_illustration
+)
+
 app = FastAPI()
 
 templates = Jinja2Templates(directory="templates")
@@ -23,6 +29,16 @@ def generate_comic(
     story_tone: str = Form(...),
     art_style: str = Form(...)
 ):
+
+    outline = generate_outline(story_prompt)
+
+    story = generate_story(outline)
+
+    illustration = generate_illustration(
+        f"{art_style} comic illustration of {character_name} "
+        f"in {setting}"
+    )
+
     return templates.TemplateResponse(
         "comic_preview.html",
         {
@@ -31,6 +47,9 @@ def generate_comic(
             "character_name": character_name,
             "setting": setting,
             "story_tone": story_tone,
-            "art_style": art_style
+            "art_style": art_style,
+            "outline": outline,
+            "story": story,
+            "illustration": illustration
         }
-)
+    )
