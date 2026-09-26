@@ -25,17 +25,17 @@
 
     <h3>Panel {{ loop.index }} - {{ panel.title }}</h3>
 
-    <p><b>Comic Image</b></p>
-
-    <p>{{ panel.image }}</p>
-
-    <p><i>{{ panel.scene_description }}</i></p>
+    <p><b>Scene:</b> {{ panel.scene_description }}</p>
 
     <p><b>Caption:</b> {{ panel.caption }}</p>
 
     <p><b>Narration:</b> {{ panel.narration }}</p>
 
-    <p><b>Image Prompt Reference:</b> {{ panel.image_prompt }}</p>
+    <p><b>Dialogue:</b> {{ panel.dialogue }}</p>
+
+    <p><b>Image:</b> {{ panel.image.status }}</p>
+
+    <p><b>Image Prompt:</b> {{ panel.image_prompt }}</p>
 
 </div>
 
