@@ -25,11 +25,9 @@
 
     <h3>Panel {{ loop.index }} - {{ panel.title }}</h3>
 
-    <div>
-        <p><b>Comic Image</b></p>
+    <p><b>Comic Image</b></p>
 
-        <p>{{ panel.image }}</p>
-    </div>
+    <p>{{ panel.image }}</p>
 
     <p><i>{{ panel.scene_description }}</i></p>
 
@@ -44,6 +42,12 @@
 <hr>
 
 {% endfor %}
+
+<br>
+
+<a href="/download-pdf?story_prompt={{ story_prompt }}&character_name={{ character_name }}&setting={{ setting }}&story_tone={{ story_tone }}&art_style={{ art_style }}">
+    <button>Download Your Comic as PDF</button>
+</a>
 
 </body>
 </html>
