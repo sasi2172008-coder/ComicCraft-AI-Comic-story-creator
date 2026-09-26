@@ -1,5 +1,7 @@
 from fastapi import APIRouter
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
+from reportlab.pdfgen import canvas
+from io import BytesIO
 
 router = APIRouter()
 
@@ -61,3 +63,39 @@ def export_success():
     </body>
     </html>
     """
+
+
+@router.get("/download-pdf")
+def download_pdf(
+    story_prompt: str,
+    character_name: str,
+    setting: str,
+    story_tone: str,
+    art_style: str
+):
+    buffer = BytesIO()
+
+    pdf = canvas.Canvas(buffer)
+
+    pdf.setTitle("ComicCraft Comic")
+
+    pdf.drawString(50, 800, "ComicCraft - AI Comic")
+    pdf.drawString(50, 770, f"Story: {story_prompt}")
+    pdf.drawString(50, 740, f"Character: {character_name}")
+    pdf.drawString(50, 710, f"Setting: {setting}")
+    pdf.drawString(50, 680, f"Story Tone: {story_tone}")
+    pdf.drawString(50, 650, f"Art Style: {art_style}")
+
+    pdf.drawString(50, 600, "Comic generated successfully!")
+
+    pdf.save()
+
+    buffer.seek(0)
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": "attachment; filename=ComicCraft.pdf"
+        }
+    )
