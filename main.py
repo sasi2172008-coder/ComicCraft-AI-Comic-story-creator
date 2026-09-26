@@ -43,6 +43,49 @@ def generate_comic(
         f"in {setting}"
     )
 
+    panels = [
+        {
+            "title": "Introduction",
+            "image": illustration,
+            "scene_description": f"{character_name} is introduced in the {setting}.",
+            "caption": "A new adventure begins.",
+            "narration": story["narration"],
+            "image_prompt": f"{art_style} comic illustration of {character_name} in {setting}"
+        },
+        {
+            "title": "Problem",
+            "image": illustration,
+            "scene_description": f"{character_name} faces a problem in the {setting}.",
+            "caption": "Something unexpected happens.",
+            "narration": story["narration"],
+            "image_prompt": f"{art_style} comic scene showing a problem in {setting}"
+        },
+        {
+            "title": "Development",
+            "image": illustration,
+            "scene_description": f"{character_name} tries to solve the problem.",
+            "caption": "The adventure continues.",
+            "narration": story["narration"],
+            "image_prompt": f"{art_style} comic scene of {character_name} solving a problem"
+        },
+        {
+            "title": "Climax",
+            "image": illustration,
+            "scene_description": f"{character_name} reaches the most important moment of the story.",
+            "caption": "The biggest challenge begins.",
+            "narration": story["narration"],
+            "image_prompt": f"{art_style} dramatic comic scene in {setting}"
+        },
+        {
+            "title": "Ending",
+            "image": illustration,
+            "scene_description": f"{character_name} completes the adventure successfully.",
+            "caption": "The story comes to an end.",
+            "narration": story["narration"],
+            "image_prompt": f"{art_style} comic ending scene in {setting}"
+        }
+    ]
+
     return templates.TemplateResponse(
         "comic_preview.html",
         {
@@ -54,6 +97,7 @@ def generate_comic(
             "art_style": art_style,
             "outline": outline,
             "story": story,
-            "illustration": illustration
+            "illustration": illustration,
+            "panels": panels
         }
     )
