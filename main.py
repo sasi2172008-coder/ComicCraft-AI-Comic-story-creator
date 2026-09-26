@@ -1,10 +1,11 @@
 from fastapi import FastAPI, Request, Form
 from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 
 from ai_services import (
     generate_outline,
     generate_story,
-    generate_illustration
+    generate_image
 )
 
 from routes import router
@@ -12,6 +13,8 @@ from routes import router
 app = FastAPI()
 
 app.include_router(router)
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 templates = Jinja2Templates(directory="templates")
 
@@ -39,15 +42,17 @@ def generate_comic(
 
     panels = generate_story(outline)
 
-    for panel in panels:
+    for index, panel in enumerate(panels, start=1):
+
         panel["image_prompt"] = (
             f"{art_style} comic illustration of "
             f"{character_name} in {setting}. "
             f"{panel['scene_description']}"
         )
 
-        panel["image"] = generate_illustration(
-            panel["image_prompt"]
+        panel["image_url"] = generate_image(
+            panel["image_prompt"],
+            f"panel_{index}.png"
         )
 
     return templates.TemplateResponse(
@@ -61,4 +66,4 @@ def generate_comic(
             "art_style": art_style,
             "panels": panels
         }
-    )
+         )
