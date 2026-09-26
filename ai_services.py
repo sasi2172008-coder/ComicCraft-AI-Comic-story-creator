@@ -1,4 +1,9 @@
 
+import os
+import requests
+from urllib.parse import quote
+
+
 def generate_outline(story_prompt):
     return [
         {
@@ -42,15 +47,42 @@ def generate_story(outline):
             "image_prompt": (
                 "Cartoon comic panel showing "
                 + panel["scene_description"]
-            ),
-            "image": "Comic illustration placeholder"
+            )
         })
 
     return panels
 
 
-def generate_illustration(prompt):
-    return {
-        "status": "Illustration placeholder ready",
-        "prompt": prompt
-    }
+def generate_image(prompt, filename):
+    api_key = os.getenv("POLLINATIONS_API_KEY")
+
+    if not api_key:
+        raise RuntimeError("POLLINATIONS_API_KEY is missing")
+
+    model = "sana"
+
+    image_url = (
+        "https://gen.pollinations.ai/image/"
+        + quote(prompt)
+        + "?model="
+        + quote(model)
+    )
+
+    response = requests.get(
+        image_url,
+        headers={
+            "Authorization": f"Bearer {api_key}"
+        },
+        timeout=120
+    )
+
+    response.raise_for_status()
+
+    os.makedirs("static/images", exist_ok=True)
+
+    file_path = os.path.join("static", "images", filename)
+
+    with open(file_path, "wb") as file:
+        file.write(response.content)
+
+    return f"/static/images/{filename}"
