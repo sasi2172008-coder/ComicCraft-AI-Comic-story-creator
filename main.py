@@ -37,12 +37,18 @@ def generate_comic(
 
     outline = generate_outline(story_prompt)
 
-    story = generate_story(outline)
+    panels = generate_story(outline)
 
-    illustration = generate_illustration(
-        f"{art_style} comic illustration of {character_name} "
-        f"in {setting}"
-    )
+    for panel in panels:
+        panel["image_prompt"] = (
+            f"{art_style} comic illustration of "
+            f"{character_name} in {setting}. "
+            f"{panel['scene_description']}"
+        )
+
+        panel["image"] = generate_illustration(
+            panel["image_prompt"]
+        )
 
     return templates.TemplateResponse(
         request=request,
@@ -53,9 +59,6 @@ def generate_comic(
             "setting": setting,
             "story_tone": story_tone,
             "art_style": art_style,
-            "outline": outline,
-            "story": story,
-            "illustration": illustration
+            "panels": panels
         }
-)
-        
+    )
