@@ -1,27 +1,30 @@
-
 from fastapi import APIRouter, Form, HTTPException
 from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 from reportlab.pdfgen import canvas
 from io import BytesIO
 
+from .ai_services import (
+    generate_outline,
+    generate_story,
+    generate_illustration
+)
+
 router = APIRouter()
 
 
-# -----------------------------
-# JSON Request Model
-# -----------------------------
-
+# JSON request model
 class PromptRequest(BaseModel):
     prompt: str
 
 
 # -----------------------------
-# Homepage Route
+# HOME PAGE
 # -----------------------------
 
 @router.get("/", response_class=HTMLResponse)
 def home():
+
     return """
     <!DOCTYPE html>
     <html>
@@ -33,7 +36,7 @@ def home():
 
         <h1>ComicCraft - AI Comic Story Creator</h1>
 
-        <p>Create your own AI-powered comic story.</p>
+        <p>Create your own AI comic story.</p>
 
         <form action="/generate" method="post">
 
@@ -67,11 +70,12 @@ def home():
 
 
 # -----------------------------
-# Health Check
+# HEALTH CHECK
 # -----------------------------
 
 @router.get("/health")
 def health_check():
+
     return {
         "status": "success",
         "message": "ComicCraft backend is running"
@@ -79,11 +83,12 @@ def health_check():
 
 
 # -----------------------------
-# About Route
+# ABOUT
 # -----------------------------
 
 @router.get("/about")
 def about():
+
     return {
         "project": "ComicCraft",
         "description": "AI Comic Story Creator"
@@ -91,7 +96,7 @@ def about():
 
 
 # -----------------------------
-# Comic Generation Route
+# COMIC GENERATION
 # -----------------------------
 
 @router.post("/generate", response_class=HTMLResponse)
@@ -102,11 +107,28 @@ def generate(
     story_tone: str = Form(...),
     art_style: str = Form(...)
 ):
+
     try:
+
+        # Step 1: Create 5-panel outline
+        outline = generate_outline(story_prompt)
+
+        # Step 2: Generate story content
+        panels = generate_story(outline)
+
+        # Step 3: Generate illustration for every panel
+        for panel in panels:
+
+            illustration = generate_illustration(
+                panel["image_prompt"]
+            )
+
+            panel["illustration"] = illustration
 
         return f"""
         <!DOCTYPE html>
         <html>
+
         <head>
             <title>ComicCraft - Comic Preview</title>
         </head>
@@ -117,23 +139,30 @@ def generate(
 
             <h2>Story Details</h2>
 
-            <p><strong>Story:</strong> {story_prompt}</p>
-            <p><strong>Character:</strong> {character_name}</p>
-            <p><strong>Setting:</strong> {setting}</p>
-            <p><strong>Story Tone:</strong> {story_tone}</p>
-            <p><strong>Art Style:</strong> {art_style}</p>
+            <p><b>Story:</b> {story_prompt}</p>
+            <p><b>Character:</b> {character_name}</p>
+            <p><b>Setting:</b> {setting}</p>
+            <p><b>Story Tone:</b> {story_tone}</p>
+            <p><b>Art Style:</b> {art_style}</p>
 
-            <h2>Comic Generation</h2>
+            <h2>Generated Comic</h2>
 
-            <p>Your 5-panel comic generation request has been received.</p>
+            <p>5 comic panels have been generated.</p>
 
-            <p>Comic panels will be generated using the AI workflow.</p>
+            <ol>
+                <li>{panels[0]["title"]}</li>
+                <li>{panels[1]["title"]}</li>
+                <li>{panels[2]["title"]}</li>
+                <li>{panels[3]["title"]}</li>
+                <li>{panels[4]["title"]}</li>
+            </ol>
 
             <a href="/export-success">
-                <button>Continue</button>
+                <button>Export Comic</button>
             </a>
 
         </body>
+
         </html>
         """
 
@@ -146,7 +175,7 @@ def generate(
 
 
 # -----------------------------
-# JSON Comic Generation API
+# JSON COMIC GENERATION
 # -----------------------------
 
 @router.post("/generate-comic/json")
@@ -154,12 +183,26 @@ def generate_comic_json(request: PromptRequest):
 
     try:
 
+        # Step 1
+        outline = generate_outline(request.prompt)
+
+        # Step 2
+        panels = generate_story(outline)
+
+        # Step 3
+        for panel in panels:
+
+            illustration = generate_illustration(
+                panel["image_prompt"]
+            )
+
+            panel["illustration"] = illustration
+
         return {
             "status": "success",
-            "message": "Comic generation API is working",
-            "prompt": request.prompt,
-            "panels": 5,
-            "layout": "5-panel comic layout",
+            "message": "Comic generated successfully",
+            "panels": panels,
+            "panel_count": len(panels),
             "pdf_path": "ComicCraft.pdf"
         }
 
@@ -172,7 +215,7 @@ def generate_comic_json(request: PromptRequest):
 
 
 # -----------------------------
-# Export Success Route
+# EXPORT SUCCESS
 # -----------------------------
 
 @router.get("/export-success", response_class=HTMLResponse)
@@ -205,7 +248,7 @@ def export_success():
 
 
 # -----------------------------
-# Image Generation Test Route
+# IMAGE GENERATION TEST
 # -----------------------------
 
 @router.get("/test-image")
@@ -213,10 +256,12 @@ def test_image(prompt: str = "A cartoon character"):
 
     try:
 
+        result = generate_illustration(prompt)
+
         return {
             "status": "success",
-            "message": "Image generation test endpoint is working",
-            "prompt": prompt
+            "message": "Image generation test completed",
+            "result": result
         }
 
     except Exception as e:
@@ -228,7 +273,7 @@ def test_image(prompt: str = "A cartoon character"):
 
 
 # -----------------------------
-# PDF Download Route
+# PDF DOWNLOAD
 # -----------------------------
 
 @router.get("/download-pdf")
@@ -248,7 +293,10 @@ def download_pdf(
 
         pdf.setTitle("ComicCraft Comic")
 
-        pdf.drawString(50, 800, "ComicCraft - AI Comic")
+        pdf.drawString(
+            50, 800,
+            "ComicCraft - AI Comic"
+        )
 
         pdf.drawString(
             50, 770,
