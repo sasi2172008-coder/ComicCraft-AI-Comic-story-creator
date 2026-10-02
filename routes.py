@@ -1,9 +1,12 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Request, Form, HTTPException
+from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
-from fastapi.responses import StreamingResponse
+
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
+
 from io import BytesIO
 import os
 
@@ -14,11 +17,32 @@ from ai_services import (
     build_comic_layout
 )
 
+
 router = APIRouter()
 
+templates = Jinja2Templates(directory="templates")
+
+
+# -------------------------------------------------
+# JSON REQUEST MODEL
+# -------------------------------------------------
 
 class PromptRequest(BaseModel):
     prompt: str
+
+
+# -------------------------------------------------
+# HOME PAGE
+# -------------------------------------------------
+
+@router.get("/", response_class=HTMLResponse)
+def home(request: Request):
+    return templates.TemplateResponse(
+        "index.html",
+        {
+            "request": request
+        }
+    )
 
 
 # -------------------------------------------------
@@ -46,24 +70,168 @@ def about():
 
 
 # -------------------------------------------------
-# GENERATE COMIC
+# SAVE PDF
 # -------------------------------------------------
 
-@router.post("/generate-comic/json")
-def generate_comic_json(request: PromptRequest):
+def save_pdf(panels):
+
+    os.makedirs("static/comics", exist_ok=True)
+
+    pdf_path = os.path.join(
+        "static",
+        "comics",
+        "ComicCraft.pdf"
+    )
+
+    pdf = canvas.Canvas(
+        pdf_path,
+        pagesize=A4
+    )
+
+    page_width, page_height = A4
+
+    pdf.setTitle("ComicCraft - AI Comic")
+
+    for index, panel in enumerate(panels, start=1):
+
+        if index > 1:
+            pdf.showPage()
+
+        # Title
+        pdf.setFont("Helvetica-Bold", 18)
+
+        pdf.drawString(
+            40,
+            page_height - 50,
+            f"Panel {index}: {panel.get('title', '')}"
+        )
+
+        # Narration
+        pdf.setFont("Helvetica", 11)
+
+        text = panel.get(
+            "narration",
+            panel.get("scene_description", "")
+        )
+
+        text_object = pdf.beginText(
+            40,
+            page_height - 80
+        )
+
+        text_object.setLeading(15)
+
+        # Split long text into lines
+        words = text.split()
+        line = ""
+
+        for word in words:
+
+            if len(line) + len(word) > 90:
+
+                text_object.textLine(line)
+                line = word + " "
+
+            else:
+                line += word + " "
+
+        if line:
+            text_object.textLine(line)
+
+        pdf.drawText(text_object)
+
+        # Image
+        image_url = panel.get("image_url", "")
+
+        if image_url:
+
+            image_path = image_url.lstrip("/")
+
+            if os.path.exists(image_path):
+
+                try:
+
+                    image = ImageReader(image_path)
+
+                    pdf.drawImage(
+                        image,
+                        50,
+                        150,
+                        width=490,
+                        height=300,
+                        preserveAspectRatio=True,
+                        anchor="c",
+                        mask="auto"
+                    )
+
+                except Exception:
+                    pass
+
+        # Caption
+        pdf.setFont(
+            "Helvetica-Oblique",
+            10
+        )
+
+        pdf.drawString(
+            40,
+            100,
+            panel.get("caption", "")
+        )
+
+    pdf.save()
+
+    return pdf_path
+
+
+# -------------------------------------------------
+# GENERATE COMIC FROM FORM
+# -------------------------------------------------
+
+@router.post("/generate", response_class=HTMLResponse)
+async def generate_comic(
+    request: Request,
+    story_prompt: str = Form(...),
+    character_name: str = Form(...),
+    setting: str = Form(...),
+    story_tone: str = Form(...),
+    art_style: str = Form(...)
+):
 
     try:
 
+        # Combine all user inputs
+        complete_prompt = f"""
+Story idea: {story_prompt}
+
+Main character: {character_name}
+
+Setting: {setting}
+
+Story tone: {story_tone}
+
+Art style: {art_style}
+"""
+
         # Create 5-panel outline
-        outline = generate_outline(request.prompt)
+        outline = generate_outline(
+            complete_prompt
+        )
 
-        # Create story for each panel
-        panels = generate_story(outline)
+        # Generate story
+        panels = generate_story(
+            outline
+        )
 
-        # Generate image for every panel
-        for index, panel in enumerate(panels, start=1):
+        # Generate images
+        for index, panel in enumerate(
+            panels,
+            start=1
+        ):
 
-            filename = f"comic_panel_{index}.png"
+            filename = (
+                f"comic_panel_{index}.png"
+            )
 
             image_url = generate_image(
                 panel["image_prompt"],
@@ -72,8 +240,87 @@ def generate_comic_json(request: PromptRequest):
 
             panel["image_url"] = image_url
 
-        # Build comic layout
-        comic = build_comic_layout(panels)
+        # Build layout
+        comic = build_comic_layout(
+            panels
+        )
+
+        # Save PDF
+        pdf_path = save_pdf(
+            panels
+        )
+
+        # Send data to preview page
+        return templates.TemplateResponse(
+            "comic_preview.html",
+            {
+                "request": request,
+                "story_prompt": story_prompt,
+                "character_name": character_name,
+                "setting": setting,
+                "story_tone": story_tone,
+                "art_style": art_style,
+                "panels": panels,
+                "comic": comic,
+                "pdf_path": pdf_path
+            }
+        )
+
+    except Exception as e:
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Comic generation failed: {str(e)}"
+        )
+
+
+# -------------------------------------------------
+# GENERATE COMIC - JSON API
+# -------------------------------------------------
+
+@router.post("/generate-comic/json")
+def generate_comic_json(
+    request: PromptRequest
+):
+
+    try:
+
+        # Create outline
+        outline = generate_outline(
+            request.prompt
+        )
+
+        # Create story
+        panels = generate_story(
+            outline
+        )
+
+        # Generate image for each panel
+        for index, panel in enumerate(
+            panels,
+            start=1
+        ):
+
+            filename = (
+                f"comic_panel_{index}.png"
+            )
+
+            image_url = generate_image(
+                panel["image_prompt"],
+                filename
+            )
+
+            panel["image_url"] = image_url
+
+        # Build layout
+        comic = build_comic_layout(
+            panels
+        )
+
+        # Save PDF
+        pdf_path = save_pdf(
+            panels
+        )
 
         return {
             "status": "success",
@@ -81,7 +328,8 @@ def generate_comic_json(request: PromptRequest):
             "story_prompt": request.prompt,
             "panel_count": len(panels),
             "panels": panels,
-            "comic": comic
+            "comic": comic,
+            "pdf_path": pdf_path
         }
 
     except Exception as e:
@@ -93,12 +341,15 @@ def generate_comic_json(request: PromptRequest):
 
 
 # -------------------------------------------------
-# TEST IMAGE GENERATION
+# TEST IMAGE
 # -------------------------------------------------
 
 @router.get("/test-image")
 def test_image(
-    prompt: str = "A colorful cartoon character standing in a beautiful forest"
+    prompt: str = (
+        "A colorful cartoon character "
+        "standing in a beautiful forest"
+    )
 ):
 
     try:
@@ -123,160 +374,54 @@ def test_image(
 
 
 # -------------------------------------------------
-# EXPORT SUCCESS PAGE
-# -------------------------------------------------
-
-@router.get("/export-success")
-def export_success():
-
-    return """
-    <!DOCTYPE html>
-    <html>
-
-    <head>
-        <title>ComicCraft - Export Success</title>
-    </head>
-
-    <body>
-
-        <h1>Comic Export Successful!</h1>
-
-        <p>Your ComicCraft comic has been successfully exported.</p>
-
-        <p>Your comic PDF is ready.</p>
-
-        <a href="/">
-            <button>Go Create Another Comic</button>
-        </a>
-
-    </body>
-
-    </html>
-    """
-
-
-# -------------------------------------------------
 # DOWNLOAD PDF
 # -------------------------------------------------
 
 @router.get("/download-pdf")
 def download_pdf():
 
-    try:
+    pdf_path = os.path.join(
+        "static",
+        "comics",
+        "ComicCraft.pdf"
+    )
 
-        buffer = BytesIO()
-
-        pdf = canvas.Canvas(
-            buffer,
-            pagesize=A4
-        )
-
-        page_width, page_height = A4
-
-        pdf.setTitle("ComicCraft - AI Comic")
-
-        # Title
-        pdf.setFont("Helvetica-Bold", 20)
-
-        pdf.drawString(
-            50,
-            page_height - 50,
-            "ComicCraft - AI Comic"
-        )
-
-        y = page_height - 90
-
-        # Find generated panel images
-        image_folder = "static/images"
-
-        panel_files = []
-
-        for index in range(1, 6):
-
-            filename = f"comic_panel_{index}.png"
-
-            path = os.path.join(
-                image_folder,
-                filename
-            )
-
-            if os.path.exists(path):
-                panel_files.append(path)
-
-        # Add each panel
-        for index, image_path in enumerate(panel_files, start=1):
-
-            # New page if necessary
-            if y < 250:
-
-                pdf.showPage()
-
-                pdf.setFont(
-                    "Helvetica-Bold",
-                    18
-                )
-
-                pdf.drawString(
-                    50,
-                    page_height - 50,
-                    "ComicCraft - AI Comic"
-                )
-
-                y = page_height - 90
-
-            pdf.setFont(
-                "Helvetica-Bold",
-                14
-            )
-
-            pdf.drawString(
-                50,
-                y,
-                f"Panel {index}"
-            )
-
-            y -= 20
-
-            # Add image
-            try:
-
-                image = ImageReader(image_path)
-
-                image_width = 480
-                image_height = 270
-
-                pdf.drawImage(
-                    image,
-                    50,
-                    y - image_height,
-                    width=image_width,
-                    height=image_height,
-                    preserveAspectRatio=True,
-                    mask="auto"
-                )
-
-                y -= image_height + 30
-
-            except Exception:
-                pass
-
-        # Finish PDF
-        pdf.save()
-
-        buffer.seek(0)
-
-        return StreamingResponse(
-            buffer,
-            media_type="application/pdf",
-            headers={
-                "Content-Disposition":
-                "attachment; filename=ComicCraft.pdf"
-            }
-        )
-
-    except Exception as e:
+    if not os.path.exists(pdf_path):
 
         raise HTTPException(
-            status_code=500,
-            detail=f"PDF generation failed: {str(e)}"
+            status_code=404,
+            detail="PDF not found. Generate a comic first."
+        )
+
+    with open(pdf_path, "rb") as file:
+
+        content = file.read()
+
+    return StreamingResponse(
+        BytesIO(content),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition":
+            "attachment; filename=ComicCraft.pdf"
+        }
+    )
+
+
+# -------------------------------------------------
+# EXPORT SUCCESS
+# -------------------------------------------------
+
+@router.get(
+    "/export-success",
+    response_class=HTMLResponse
+)
+def export_success(
+    request: Request
+):
+
+    return templates.TemplateResponse(
+        "export_success.html",
+        {
+            "request": request
+        }
 )
